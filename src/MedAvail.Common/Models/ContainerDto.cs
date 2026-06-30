@@ -1,5 +1,4 @@
 using System;
-using MedAvail.Utilities;
 
 namespace MedAvail.Common.Models
 {
@@ -19,11 +18,5 @@ namespace MedAvail.Common.Models
         public int PackageDefinitionTypeId { get; set; }          // package_definition_type_id (proc's @container_type)
         public string? ChangedBy { get; set; }                    // changed_by
         public DateTime ChangedOn { get; set; }                   // changed_on
-
-        public string GetDisplayDescription() =>
-            Description?.ToTitleCase() ?? string.Empty;
-
-        public string GetFormattedChangedOn() =>
-            ChangedOn.ToIso8601();
     }
 }

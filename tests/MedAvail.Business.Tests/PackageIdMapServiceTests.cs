@@ -8,15 +8,8 @@ using Xunit;
 
 namespace MedAvail.Business.Tests;
 
-/// <summary>
-/// Unit tests for PackageIdMapService. The IPackageIdMapRepository is mocked,
-/// so these tests exercise the GUID normalization, register/upsert rules, and
-/// duplicate guarding without a database.
-/// </summary>
 public class PackageIdMapServiceTests
 {
-    // ---------- NormalizeGuid (pure) ----------
-
     [Fact]
     public void NormalizeGuid_NullOrWhitespace_ReturnsNull()
     {
@@ -28,7 +21,7 @@ public class PackageIdMapServiceTests
     public void NormalizeGuid_BracedUppercase_ReturnsCanonicalLowercase()
     {
         var g = Guid.NewGuid();
-        var input = g.ToString("B").ToUpperInvariant();   // {AAAA-...} uppercase
+        var input = g.ToString("B").ToUpperInvariant();
         var normalized = PackageIdMapService.NormalizeGuid(input);
         Assert.Equal(g.ToString("D").ToLowerInvariant(), normalized);
     }
@@ -38,8 +31,6 @@ public class PackageIdMapServiceTests
     {
         Assert.Throws<FormatException>(() => PackageIdMapService.NormalizeGuid("not-a-guid"));
     }
-
-    // ---------- Register ----------
 
     [Fact]
     public void Register_NewId_InsertsNormalizedGuid()
@@ -51,34 +42,37 @@ public class PackageIdMapServiceTests
         var service = new PackageIdMapService(repo.Object);
         var raw = Guid.NewGuid().ToString("B").ToUpperInvariant();
 
-        var affected = service.Register(10, raw);
+        var result = service.Register(10, raw);
 
-        Assert.Equal(1, affected);
+        Assert.True(result.IsSuccess);
+        Assert.Equal(1, result.Value);
         repo.Verify(r => r.Insert(It.Is<PackageIdMapDto>(d =>
             d.PackageId == 10 &&
             d.PackageGuid == raw.Trim('{', '}').ToLowerInvariant())), Times.Once);
     }
 
     [Fact]
-    public void Register_ExistingId_ThrowsAndDoesNotInsert()
+    public void Register_ExistingId_ReturnsFailure()
     {
         var repo = new Mock<IPackageIdMapRepository>();
         repo.Setup(r => r.CountByPackageId(10)).Returns(1);
 
         var service = new PackageIdMapService(repo.Object);
 
-        Assert.Throws<InvalidOperationException>(() => service.Register(10, null));
+        var result = service.Register(10, null);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains("already registered", result.ErrorSummary);
         repo.Verify(r => r.Insert(It.IsAny<PackageIdMapDto>()), Times.Never);
     }
 
     [Fact]
-    public void Register_NegativeId_Throws()
+    public void Register_NegativeId_ReturnsFailure()
     {
         var service = new PackageIdMapService(Mock.Of<IPackageIdMapRepository>());
-        Assert.Throws<ArgumentOutOfRangeException>(() => service.Register(-1, null));
+        var result = service.Register(-1, null);
+        Assert.False(result.IsSuccess);
     }
-
-    // ---------- RegisterOrUpdate (upsert) ----------
 
     [Fact]
     public void RegisterOrUpdate_NewId_Inserts()
@@ -88,9 +82,10 @@ public class PackageIdMapServiceTests
         repo.Setup(r => r.Insert(It.IsAny<PackageIdMapDto>())).Returns(1);
 
         var service = new PackageIdMapService(repo.Object);
-        var affected = service.RegisterOrUpdate(20, Guid.NewGuid().ToString());
+        var result = service.RegisterOrUpdate(20, Guid.NewGuid().ToString());
 
-        Assert.Equal(1, affected);
+        Assert.True(result.IsSuccess);
+        Assert.Equal(1, result.Value);
         repo.Verify(r => r.Insert(It.IsAny<PackageIdMapDto>()), Times.Once);
         repo.Verify(r => r.UpdateGuid(It.IsAny<int>(), It.IsAny<string?>()), Times.Never);
     }
@@ -104,14 +99,13 @@ public class PackageIdMapServiceTests
 
         var service = new PackageIdMapService(repo.Object);
         var g = Guid.NewGuid().ToString();
-        var affected = service.RegisterOrUpdate(20, g);
+        var result = service.RegisterOrUpdate(20, g);
 
-        Assert.Equal(1, affected);
+        Assert.True(result.IsSuccess);
+        Assert.Equal(1, result.Value);
         repo.Verify(r => r.UpdateGuid(20, g.ToLowerInvariant()), Times.Once);
         repo.Verify(r => r.Insert(It.IsAny<PackageIdMapDto>()), Times.Never);
     }
-
-    // ---------- query helpers ----------
 
     [Fact]
     public void IsRegistered_ReflectsRepositoryCount()

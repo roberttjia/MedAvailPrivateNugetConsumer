@@ -11,12 +11,6 @@ using MedAvail.TestRunner.Harness;
 
 namespace MedAvail.TestRunner.Tests;
 
-/// <summary>
-/// Full-stack business-layer tests for PackageIdMapService:
-/// runner -> service -> IPackageIdMapRepository -> live database. Runs the same
-/// service over the ADO.NET, EF Core, and EF6 repositories (all bound to
-/// PackageManagement). Re-runnable: uses high random package ids and cleans up.
-/// </summary>
 public sealed class BusinessLayerPackageIdMapTests
 {
     private readonly IConnectionStringProvider _connections;
@@ -42,31 +36,30 @@ public sealed class BusinessLayerPackageIdMapTests
         const string cat = "BusinessLayer.PackageIdMap";
         var service = new PackageIdMapService(repo);
         var packageId = 2_000_000_000 + _rng.Next(1, 90_000_000);
-        var guid = Guid.NewGuid().ToString("B").ToUpperInvariant(); // braced/upper to exercise normalization
+        var guid = Guid.NewGuid().ToString("B").ToUpperInvariant();
 
         harness.Run($"Service.Register normalizes + persists ({tech})", cat, tech, () =>
         {
-            var affected = service.Register(packageId, guid);
-            Assert.Equal(1, affected, "register should insert one row");
+            var result = service.Register(packageId, guid);
+            Assert.True(result.IsSuccess, "register should succeed");
+            Assert.Equal(1, result.Value, "register should insert one row");
             Assert.True(service.IsRegistered(packageId), "id should be registered after Register");
-            // Stored guid should be canonical lowercase, no braces.
             Assert.Equal(guid.Trim('{', '}').ToLowerInvariant(), service.GetGuid(packageId),
                 "stored guid should be normalized");
         });
 
         harness.Run($"Service.Register rejects duplicate ({tech})", cat, tech, () =>
         {
-            var threw = false;
-            try { service.Register(packageId, Guid.NewGuid().ToString()); }
-            catch (InvalidOperationException) { threw = true; }
-            Assert.True(threw, "second Register of the same id should throw");
+            var result = service.Register(packageId, Guid.NewGuid().ToString());
+            Assert.True(!result.IsSuccess, "second Register of the same id should fail");
         });
 
         harness.Run($"Service.RegisterOrUpdate updates existing ({tech})", cat, tech, () =>
         {
             var newGuid = Guid.NewGuid().ToString();
-            var affected = service.RegisterOrUpdate(packageId, newGuid);
-            Assert.Equal(1, affected, "upsert should update one row");
+            var result = service.RegisterOrUpdate(packageId, newGuid);
+            Assert.True(result.IsSuccess, "upsert should succeed");
+            Assert.Equal(1, result.Value, "upsert should update one row");
             Assert.Equal(newGuid.ToLowerInvariant(), service.GetGuid(packageId),
                 "guid should be updated to the new normalized value");
         });

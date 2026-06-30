@@ -4,6 +4,10 @@
     <ProjectReference Include="..\MedAvail.Common\MedAvail.Common.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="MedAvail.Utilities" Version="1.0.0" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <LangVersion>latest</LangVersion>

@@ -49,8 +49,9 @@ public sealed class BusinessLayerTests
         {
             seeder.EnsurePackageDefinitionLookups();
             var dto = BuildDefinition(marker);
-            // Business layer applies defaults, validates, then inserts via the repo.
-            newId = service.CreateValidated(dto, createdBy: "biz-test", utcNow: DateTime.UtcNow);
+            var result = service.CreateValidated(dto, createdBy: "biz-test", utcNow: DateTime.UtcNow);
+            Assert.True(result.IsSuccess, "service should succeed for a valid definition");
+            newId = result.Value;
             Assert.True(newId > 0, "service should return the new identity from the repository");
         });
 
@@ -75,16 +76,8 @@ public sealed class BusinessLayerTests
         {
             var invalid = BuildDefinition(marker);
             invalid.ProductName = "";  // violates a business rule
-            var threw = false;
-            try
-            {
-                service.CreateValidated(invalid, "biz-test", DateTime.UtcNow);
-            }
-            catch (InvalidOperationException)
-            {
-                threw = true;
-            }
-            Assert.True(threw, "service should reject an invalid definition before inserting");
+            var result = service.CreateValidated(invalid, "biz-test", DateTime.UtcNow);
+            Assert.True(!result.IsSuccess, "service should reject an invalid definition before inserting");
         });
 
         harness.Run($"Cleanup inserted row ({tech})", cat, tech, () =>
